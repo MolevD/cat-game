@@ -62,17 +62,37 @@
     let score = 0;
     let isGameOver = false;
 
+    // Определяем, сенсорное ли устройство
+    const isTouchDevice = 'ontouchstart' in window;
+
     // Клавиатура
-    document.addEventListener('keydown', function(event) {
-        if (event.code === 'Space') {
-            if (isGameOver) {
-                resetGame();
-            } else if (!isJumping) {
-                catVelocityY = jumpPower;
-                isJumping = true;
-            }
-        }
-    });
+document.addEventListener('keydown', function(event) {
+    if (event.code === 'Space') {
+        event.preventDefault();   // чтобы пробел не прокручивал страницу
+        handleAction();
+    }
+});
+
+    // --- НОВОЕ: одна функция для "действия прыжка или рестарта" ---
+function handleAction() {
+    if (isGameOver) {
+        resetGame();
+    } else if (!isJumping) {
+        catVelocityY = jumpPower;
+        isJumping = true;
+    }
+}
+
+// --- НОВОЕ: касание экрана на телефоне ---
+canvas.addEventListener('touchstart', function(event) {
+    event.preventDefault();  // не давать браузеру масштабировать/прокручивать
+    handleAction();
+});
+
+// --- НОВОЕ: клик мышкой по холсту (для компа — альтернатива пробелу) ---
+canvas.addEventListener('mousedown', function(event) {
+    handleAction();
+});
 
     function resetGame() {
         catY = groundY - catHeight;
@@ -237,8 +257,10 @@
 
             ctx.font = '20px Arial';
             ctx.fillText('Счёт: ' + score, canvas.width / 2, canvas.height / 2 + 20);
-            ctx.fillText('Нажми Пробел, чтобы начать заново', canvas.width / 2, canvas.height / 2 + 55);
-
+            
+        // Показываем разную подсказку на телефоне и на компе
+        const hint = isTouchDevice ? 'Коснись экрана, чтобы начать заново' : 'Нажми Пробел, чтобы начать заново';
+        ctx.fillText(hint, canvas.width / 2, canvas.height / 2 + 55);
             ctx.textAlign = 'left';
         }
     }
