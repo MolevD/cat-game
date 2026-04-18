@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Кошка в квартире</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #f0e6d2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            background-color: #ffffff;
+            border: 3px solid #333;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const groundY = 350;
+    const gravity = 0.6;
+    const jumpPower = -12;
+    const gameSpeed = 4;
+
+    // Кошка
+    const catX = 100;
+    const catWidth = 50;
+    const catHeight = 50;
+    let catY = groundY - catHeight;
+    let catVelocityY = 0;
+    let isJumping = false;
+
+    // Препятствия
+    let obstacles = [];
+    const obstacleTypes = [
+        { name: 'тапок',  color: '#4a90e2', width: 60, height: 25 },
+        { name: 'мячик',  color: '#e74c3c', width: 30, height: 30 },
+        { name: 'клубок', color: '#9b59b6', width: 35, height: 35 }
+    ];
+    let obstacleTimer = 0;
+    let nextObstacleIn = 100;
+
+    // --- НОВОЕ: мышки ---
+    let mice = [];
+    const mouseWidth = 30;
+    const mouseHeight = 20;
+    const mouseColor = '#7f8c8d';
+    const mouseBonus = 3;                // сколько очков за мышку
+    let mouseTimer = 0;
+    let nextMouseIn = 200;
+
+    let score = 0;
+    let isGameOver = false;
+
+    // Клавиатура
+    document.addEventListener('keydown', function(event) {
+        if (event.code === 'Space') {
+            if (isGameOver) {
+                resetGame();
+            } else if (!isJumping) {
+                catVelocityY = jumpPower;
+                isJumping = true;
+            }
+        }
+    });
+
+    function resetGame() {
+        catY = groundY - catHeight;
+        catVelocityY = 0;
+        isJumping = false;
+        obstacles = [];
+        mice = [];                       // НОВОЕ: очищаем и мышек
+        obstacleTimer = 0;
+        nextObstacleIn = 100;
+        mouseTimer = 0;
+        nextMouseIn = 200;
+        score = 0;
+        isGameOver = false;
+    }
+
+    // Проверка столкновения (та же, что раньше)
+    function isColliding(a, b) {
+        return a.x < b.x + b.width &&
+               a.x + a.width > b.x &&
+               a.y < b.y + b.height &&
+               a.y + a.height > b.y;
+    }
+
+    function spawnObstacle() {
+        const typeIndex = Math.floor(Math.random() * obstacleTypes.length);
+        const type = obstacleTypes[typeIndex];
+        obstacles.push({
+            x: canvas.width,
+            y: groundY - type.height,
+            width: type.width,
+            height: type.height,
+            color: type.color
+        });
+    }
+
+    // --- НОВОЕ: создаём мышку ---
+    function spawnMouse() {
+        // Мышка летит на такой высоте, что её достаёшь в прыжке
+        // (над полом, но ниже верхней точки прыжка)
+        const mouseY = groundY - catHeight - 40;
+        mice.push({
+            x: canvas.width,
+            y: mouseY,
+            width: mouseWidth,
+            height: mouseHeight,
+            color: mouseColor
+        });
+    }
+
+    function update() {
+        if (isGameOver) return;
+
+        // Гравитация
+        catVelocityY = catVelocityY + gravity;
+        catY = catY + catVelocityY;
+        if (catY >= groundY - catHeight) {
+            catY = groundY - catHeight;
+            catVelocityY = 0;
+            isJumping = false;
+        }
+
+        // Таймер препятствий
+        obstacleTimer = obstacleTimer + 1;
+        if (obstacleTimer >= nextObstacleIn) {
+            spawnObstacle();
+            obstacleTimer = 0;
+            nextObstacleIn = 80 + Math.floor(Math.random() * 80);
+        }
+
+        // --- НОВОЕ: таймер мышек ---
+        mouseTimer = mouseTimer + 1;
+        if (mouseTimer >= nextMouseIn) {
+            spawnMouse();
+            mouseTimer = 0;
+            nextMouseIn = 150 + Math.floor(Math.random() * 200);
+        }
+
+        // Двигаем препятствия
+        for (let i = 0; i < obstacles.length; i++) {
+            obstacles[i].x = obstacles[i].x - gameSpeed;
+        }
+
+        // --- НОВОЕ: двигаем мышек ---
+        for (let i = 0; i < mice.length; i++) {
+            mice[i].x = mice[i].x - gameSpeed;
+        }
+
+        // Объект кошки для проверок
+        const cat = { x: catX, y: catY, width: catWidth, height: catHeight };
+
+        // Столкновение с препятствиями = Game Over
+        for (let i = 0; i < obstacles.length; i++) {
+            if (isColliding(cat, obstacles[i])) {
+                isGameOver = true;
+            }
+        }
+
+        // --- НОВОЕ: поймали мышку? ---
+        // Проходим по массиву и оставляем только тех, кого НЕ поймали
+        mice = mice.filter(function(mouse) {
+            if (isColliding(cat, mouse)) {
+                score = score + mouseBonus;   // +3 очка
+                return false;                  // убираем эту мышку из массива
+            }
+            return true;                       // оставляем
+        });
+
+        // Удаляем уехавшие препятствия (и считаем очки)
+        const beforeCount = obstacles.length;
+        obstacles = obstacles.filter(function(obs) {
+            return obs.x + obs.width > 0;
+        });
+        score = score + (beforeCount - obstacles.length);
+
+        // Удаляем уехавших мышек (без очков — не поймали, значит)
+        mice = mice.filter(function(mouse) {
+            return mouse.x + mouse.width > 0;
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Пол
+        ctx.fillStyle = '#8b6f47';
+        ctx.fillRect(0, groundY, canvas.width, 50);
+
+        // Кошка
+        ctx.fillStyle = '#ff8c42';
+        ctx.fillRect(catX, catY, catWidth, catHeight);
+
+        // Препятствия
+        for (let i = 0; i < obstacles.length; i++) {
+            const obs = obstacles[i];
+            ctx.fillStyle = obs.color;
+            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        }
+
+        // --- НОВОЕ: мышки ---
+        for (let i = 0; i < mice.length; i++) {
+            const mouse = mice[i];
+            ctx.fillStyle = mouse.color;
+            ctx.fillRect(mouse.x, mouse.y, mouse.width, mouse.height);
+        }
+
+        // Счёт
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText('Счёт: ' + score, canvas.width - 20, 35);
+        ctx.textAlign = 'left';
+
+        // Game Over
+        if (isGameOver) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 48px Arial';
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+
+            ctx.font = '20px Arial';
+            ctx.fillText('Счёт: ' + score, canvas.width / 2, canvas.height / 2 + 20);
+            ctx.fillText('Нажми Пробел, чтобы начать заново', canvas.width / 2, canvas.height / 2 + 55);
+
+            ctx.textAlign = 'left';
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+</script>
+</body>
+</html>
